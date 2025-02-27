@@ -103,6 +103,104 @@
        PROCEDURE DIVISION.
        MAIN-PROCEDURE.
 
+              PROCEDURE DIVISION.
+       MAIN-PROCEDURE.
+
+           *> Step 1: Read Customers into Memory
+           OPEN INPUT CUSTOMERS-FILE
+
+           PERFORM UNTIL END-OF-FILE
+               READ CUSTOMERS-FILE INTO CUSTOMER-RECORD
+                   AT END MOVE 'Y' TO WS-EOF
+               END-READ
+
+               IF NOT END-OF-FILE
+                   ADD 1 TO WS-CUSTOMER-COUNT
+                   MOVE CUSTOMER-ID TO TABLE-CUSTOMER-ID(WS-CUSTOMER-COUNT)
+                   MOVE CUSTOMER-NAME TO TABLE-CUSTOMER-NAME(WS-CUSTOMER-COUNT)
+                   MOVE CUSTOMER-ADDRESS TO TABLE-CUSTOMER-ADDRESS(WS-CUSTOMER-COUNT)
+                   MOVE CUSTOMER-CITY TO TABLE-CUSTOMER-CITY(WS-CUSTOMER-COUNT)
+                   MOVE STATE-ZIP-COUNTRY TO TABLE-STATE-ZIP-COUNTRY(WS-CUSTOMER-COUNT)
+                   MOVE AMOUNT-OWED TO TABLE-AMOUNT-OWED(WS-CUSTOMER-COUNT)
+               END-IF
+           END-PERFORM.
+           CLOSE CUSTOMERS-FILE.
+
+           *> Step 2: Read Inventory into Memory
+           OPEN INPUT INVENTORY-FILE
+
+           PERFORM UNTIL END-OF-FILE
+               READ INVENTORY-FILE INTO INVENTORY-RECORD
+                   AT END MOVE 'Y' TO WS-EOF
+               END-READ
+
+               IF NOT END-OF-FILE
+                   ADD 1 TO WS-INVENTORY-COUNT
+                   MOVE INVENTORY-ID TO TABLE-INVENTORY-ID(WS-INVENTORY-COUNT)
+                   MOVE ITEM-NAME TO TABLE-ITEM-NAME(WS-INVENTORY-COUNT)
+                   MOVE IN-STOCK TO TABLE-IN-STOCK(WS-INVENTORY-COUNT)
+                   MOVE REORDER-POINT TO TABLE-REORDER-POINT(WS-INVENTORY-COUNT)
+                   MOVE COST TO TABLE-COST(WS-INVENTORY-COUNT)
+               END-IF
+           END-PERFORM.
+           CLOSE INVENTORY-FILE.
+
+           *> Step 3: Process Transactions & Update Inventory
+           OPEN INPUT TRANSACTION-FILE
+           OPEN OUTPUT INVOICE-FILE
+           OPEN OUTPUT ERROR-FILE
+
+           PERFORM UNTIL END-OF-FILE
+               READ TRANSACTION-FILE INTO TRANSACTION-RECORD
+                   AT END MOVE 'Y' TO WS-EOF
+               END-READ
+
+               IF NOT END-OF-FILE
+                   *> Step 3.1: Find Customer
+                   SEARCH TABLE-CUSTOMER-ID
+                       WHEN TABLE-CUSTOMER-ID(IDX) = CUSTOMER-ID
+                           MOVE TABLE-CUSTOMER-NAME(IDX) TO INV-CUSTOMER-NAME
+                   END-SEARCH
+
+                   *> Step 3.2: Find Inventory Item
+                   SEARCH TABLE-INVENTORY-ID
+                       WHEN TABLE-INVENTORY-ID(IDX) = INVENTORY-ID
+                           IF NUMBER-ORDERED > TABLE-IN-STOCK(IDX)
+                               *> Not enough stock - Log an error
+                               MOVE "Low Stock" TO ERROR-TYPE
+                               MOVE INVENTORY-ID TO ERROR-ID
+                               WRITE ERROR-RECORD
+                           ELSE
+                               *> Deduct stock and process transaction
+                               SUBTRACT NUMBER-ORDERED FROM TABLE-IN-STOCK(IDX)
+
+                               *> If below reorder point, log a warning
+                               IF TABLE-IN-STOCK(IDX) < TABLE-REORDER-POINT(IDX)
+                                   MOVE "Reorder Item" TO ERROR-TYPE
+                                   MOVE INVENTORY-ID TO ERROR-ID
+                                   WRITE ERROR-RECORD
+                               END-IF
+
+                               *> Generate invoice
+                               MOVE TABLE-ITEM-NAME(IDX) TO INV-ITEM-NAME
+                               MOVE TABLE-COST(IDX) TO INV-ITEM-COST
+                               COMPUTE INV-TOTAL-BEFORE-DISCOUNT = TABLE-COST(IDX) * NUMBER-ORDERED
+                               MOVE "Yes" TO INV-DISCOUNT-APPLIED
+                               COMPUTE INV-TOTAL-AFTER-DISCOUNT = INV-TOTAL-BEFORE-DISCOUNT * 0.90
+                               WRITE INVOICE-RECORD
+                           END-IF
+                   END-SEARCH
+               END-IF
+           END-PERFORM.
+
+           *> Step 4: Close Files
+           CLOSE TRANSACTION-FILE
+           CLOSE INVOICE-FILE
+           CLOSE ERROR-FILE
+
+           DISPLAY "Processing Complete."
+           STOP RUN.
+
 
            *> Input Customers
            OPEN INPUT CUSTOMERS-FILE
