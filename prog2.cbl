@@ -1,5 +1,5 @@
       ******************************************************************
-      * Author: Rien Sanning, Arnav Shah,
+      * Author: Rien Sanning, Arnav Shah, William Reynolds-Uti
       * Date: 24-02-25
       * Purpose: Program 2, CSC 407
       ******************************************************************
@@ -90,20 +90,21 @@
            *> array of customer records
            01 WS-CUSTOMER-COUNT  PIC 9(3) VALUE 0.
            01 CUSTOMER-TABLE.
-             05 CUSTOMER-ENTRY OCCURS 10 TIMES INDEXED BY IDX.
-               10  TABLE-CUSTOMER-ID       PIC X(5).
-               10  TABLE-CUSTOMER-NAME     PIC X(18).
-               10  TABLE-CUSTOMER-ADDRESS  PIC X(20).
-               10  TABLE-CUSTOMER-CITY     PIC X(12).
-               10  TABLE-STATE-ZIP-COUNTRY PIC X(12).
-               10  TABLE-AMOUNT-OWED       PIC 999.99.
+             05 CUSTOMER-ENTRY OCCURS 10 TIMES INDEXED BY CIDX.
+               10  CTABLE-CUSTOMER-ID       PIC X(5).
+               10  CTABLE-CUSTOMER-NAME     PIC X(18).
+               10  CTABLE-CUSTOMER-ADDRESS  PIC X(20).
+               10  CTABLE-CUSTOMER-CITY     PIC X(12).
+               10  CTABLE-STATE-ZIP-COUNTRY PIC X(12).
+               10  CTABLE-AMOUNT-OWED       PIC 999.99.
+
 
 
        PROCEDURE DIVISION.
        MAIN-PROCEDURE.
 
 
-               *> example data testing records
+           *> Input Customers
            OPEN INPUT CUSTOMERS-FILE
 
            PERFORM UNTIL END-OF-FILE
@@ -114,42 +115,46 @@
                IF NOT END-OF-FILE
                    ADD 1 TO WS-CUSTOMER-COUNT
                    MOVE CUSTOMER-ID OF CUSTOMER-RECORD
-                       TO TABLE-CUSTOMER-ID(WS-CUSTOMER-COUNT)
+                       TO CTABLE-CUSTOMER-ID(WS-CUSTOMER-COUNT)
                    MOVE CUSTOMER-NAME
-                       TO TABLE-CUSTOMER-NAME(WS-CUSTOMER-COUNT)
+                       TO CTABLE-CUSTOMER-NAME(WS-CUSTOMER-COUNT)
                    MOVE CUSTOMER-ADDRESS
-                       TO TABLE-CUSTOMER-ADDRESS(WS-CUSTOMER-COUNT)
+                       TO CTABLE-CUSTOMER-ADDRESS(WS-CUSTOMER-COUNT)
                    MOVE CUSTOMER-CITY
-                       TO TABLE-CUSTOMER-CITY(WS-CUSTOMER-COUNT)
+                       TO CTABLE-CUSTOMER-CITY(WS-CUSTOMER-COUNT)
                    MOVE STATE-ZIP-COUNTRY
-                       TO TABLE-STATE-ZIP-COUNTRY(WS-CUSTOMER-COUNT)
+                       TO CTABLE-STATE-ZIP-COUNTRY(WS-CUSTOMER-COUNT)
                    MOVE AMOUNT-OWED
-                       TO TABLE-AMOUNT-OWED(WS-CUSTOMER-COUNT)
+                       TO CTABLE-AMOUNT-OWED(WS-CUSTOMER-COUNT)
                END-IF
            END-PERFORM.
 
            CLOSE CUSTOMERS-FILE
 
+           *> reset the EOF flag
+           MOVE 'N' TO WS-EOF
 
-               *> testing printing records from data division
-               DISPLAY " "
+           *> Input Transactions and process:
+           OPEN INPUT TRANSACTION-FILE
 
-               MOVE "INV001" TO INVENTORY-ID OF INVENTORY-RECORD
-               MOVE "Laptop Computer" TO ITEM-NAME
-               MOVE 15 TO IN-STOCK
-               MOVE 05 TO REORDER-POINT
-               MOVE 99.99 TO COST
-               DISPLAY "Inventory Record: " INVENTORY-RECORD
+           PERFORM UNTIL END-OF-FILE
+               READ TRANSACTION-FILE INTO TRANSACTION-RECORD
+                   AT END MOVE 'Y' TO WS-EOF
+               END-READ
 
+               IF NOT END-OF-FILE
+                   DISPLAY "Transaction: "
+                   DISPLAY "Customer ID: " CUSTOMER-ID
+                       OF TRANSACTION-RECORD
+               END-IF
+           END-PERFORM.
 
-               DISPLAY " "
+           *> clean spacer
+           DISPLAY "  "
+           DISPLAY "  "
+           DISPLAY "  "
 
-
-               MOVE "C1001" TO CUSTOMER-ID OF TRANSACTION-RECORD
-               MOVE "INV001" TO INVENTORY-ID OF TRANSACTION-RECORD
-               MOVE 02 TO NUMBER-ORDERED
-               MOVE "N" TO DISCOUNT
-               DISPLAY "Transaction Record: " TRANSACTION-RECORD
+           CLOSE TRANSACTION-FILE
 
                *> going to do a small example of the output files
 
@@ -177,15 +182,14 @@
                CLOSE ERROR-FILE
 
 
-               PERFORM VARYING IDX FROM 1 BY 1
-                 UNTIL IDX > WS-CUSTOMER-COUNT
+       *>       test printing customer
+                PERFORM VARYING CIDX FROM 1 BY 1
+                  UNTIL CIDX > WS-CUSTOMER-COUNT
 
-                   DISPLAY "ID: " TABLE-CUSTOMER-ID(IDX)
-                   DISPLAY "Name:" TABLE-CUSTOMER-NAME(IDX)
+                    DISPLAY "ID: " CTABLE-CUSTOMER-ID(CIDX)
+                    DISPLAY "Name:" CTABLE-CUSTOMER-NAME(CIDX)
 
-               END-PERFORM
-
-
+                END-PERFORM
 
 
 
