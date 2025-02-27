@@ -83,19 +83,55 @@
 
 
        WORKING-STORAGE SECTION.
+
+           01 WS-EOF        PIC X VALUE 'N'.
+               88 END-OF-FILE VALUE 'Y'.
+
+           *> array of customer records
+           01 WS-CUSTOMER-COUNT  PIC 9(3) VALUE 0.
+           01 CUSTOMER-TABLE.
+             05 CUSTOMER-ENTRY OCCURS 10 TIMES INDEXED BY IDX.
+               10  TABLE-CUSTOMER-ID       PIC X(5).
+               10  TABLE-CUSTOMER-NAME     PIC X(18).
+               10  TABLE-CUSTOMER-ADDRESS  PIC X(20).
+               10  TABLE-CUSTOMER-CITY     PIC X(12).
+               10  TABLE-STATE-ZIP-COUNTRY PIC X(12).
+               10  TABLE-AMOUNT-OWED       PIC 999.99.
+
+
        PROCEDURE DIVISION.
        MAIN-PROCEDURE.
 
 
                *> example data testing records
-               MOVE "C1001" TO CUSTOMER-ID OF CUSTOMER-RECORD
-               MOVE "John Smith" TO CUSTOMER-NAME
-               MOVE "123 Main Street" TO CUSTOMER-ADDRESS
-               MOVE "New York" TO CUSTOMER-CITY
-               MOVE "NY 10001 USA" TO STATE-ZIP-COUNTRY
-               MOVE 125.50 TO AMOUNT-OWED
-               DISPLAY "Customer Record: " CUSTOMER-RECORD
+           OPEN INPUT CUSTOMERS-FILE
 
+           PERFORM UNTIL END-OF-FILE
+               READ CUSTOMERS-FILE INTO CUSTOMER-RECORD
+                   AT END MOVE 'Y' TO WS-EOF
+               END-READ
+
+               IF NOT END-OF-FILE
+                   ADD 1 TO WS-CUSTOMER-COUNT
+                   MOVE CUSTOMER-ID OF CUSTOMER-RECORD
+                       TO TABLE-CUSTOMER-ID(WS-CUSTOMER-COUNT)
+                   MOVE CUSTOMER-NAME
+                       TO TABLE-CUSTOMER-NAME(WS-CUSTOMER-COUNT)
+                   MOVE CUSTOMER-ADDRESS
+                       TO TABLE-CUSTOMER-ADDRESS(WS-CUSTOMER-COUNT)
+                   MOVE CUSTOMER-CITY
+                       TO TABLE-CUSTOMER-CITY(WS-CUSTOMER-COUNT)
+                   MOVE STATE-ZIP-COUNTRY
+                       TO TABLE-STATE-ZIP-COUNTRY(WS-CUSTOMER-COUNT)
+                   MOVE AMOUNT-OWED
+                       TO TABLE-AMOUNT-OWED(WS-CUSTOMER-COUNT)
+               END-IF
+           END-PERFORM.
+
+           CLOSE CUSTOMERS-FILE
+
+
+               *> testing printing records from data division
                DISPLAY " "
 
                MOVE "INV001" TO INVENTORY-ID OF INVENTORY-RECORD
@@ -141,7 +177,18 @@
                CLOSE ERROR-FILE
 
 
+               PERFORM VARYING IDX FROM 1 BY 1
+                 UNTIL IDX > WS-CUSTOMER-COUNT
 
-            DISPLAY "END EXEC"
-            STOP RUN.
+                   DISPLAY "ID: " TABLE-CUSTOMER-ID(IDX)
+                   DISPLAY "Name:" TABLE-CUSTOMER-NAME(IDX)
+
+               END-PERFORM
+
+
+
+
+
+               DISPLAY "END EXEC"
+               STOP RUN.
        END PROGRAM PROG2.
