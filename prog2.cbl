@@ -107,8 +107,16 @@
                10 ITABLE-REORDER-POINT PIC 99.
                10 ITABLE-COST PIC 99.99.
 
+           *> transaction inventory id index
+           01 WS-TRANS-INV-ID-IDX PIC 9(3) VALUE 0.
+           01 TRANS-INV-MATCH-FOUND PIC X VALUE 'N'.
+
        PROCEDURE DIVISION.
        MAIN-PROCEDURE.
+
+           DISPLAY "  "
+           DISPLAY "BEGIN PROGRAM"
+           DISPLAY "  "
 
            *> Input Customers
            OPEN INPUT CUSTOMERS-FILE
@@ -189,10 +197,39 @@
 
                            *> if not found, output error, break loop
 
+                   *> fetch inventory ID in the same pattern
+                    PERFORM VARYING IIDX FROM 1 BY 1
+                      UNTIL IIDX > WS-INVENTORY-COUNT
+
+                       IF ITABLE-INVENTORY-ID(IIDX) =
+                            INVENTORY-ID OF TRANSACTION-RECORD
+                           *> store the index of this matching
+                           *> inventory record
+                           MOVE IIDX
+                           TO WS-TRANS-INV-ID-IDX
+
+                           MOVE 'Y' TO TRANS-INV-MATCH-FOUND
+
+                       END-IF
+                    END-PERFORM
+
+                    IF TRANS-INV-MATCH-FOUND = 'Y'
+                        *> RESET VAR
+                        MOVE 'N' TO TRANS-INV-MATCH-FOUND
+
+                    ELSE
+                        DISPLAY "CREATE TRANS INV NOT FOUND ERROR"
+                    END-IF
+
+
+                    *> print transaction item name:
+                    DISPLAY "Transaction Item: "
+                    DISPLAY ITABLE-ITEM-NAME(WS-TRANS-INV-ID-IDX)
 
 
 
-
+                   *> spacer for clean printing
+                   DISPLAY "   "
                END-IF
            END-PERFORM.
 
@@ -229,21 +266,23 @@
                CLOSE ERROR-FILE
 
 
+           *> LOOP EXAMPLES
+
        *>       test printing customer
                 PERFORM VARYING CIDX FROM 1 BY 1
                   UNTIL CIDX > WS-CUSTOMER-COUNT
-                    DISPLAY "Customer: "
-                    DISPLAY "ID: " CTABLE-CUSTOMER-ID(CIDX)
-                    DISPLAY "Name:" CTABLE-CUSTOMER-NAME(CIDX)
+      *>               DISPLAY "Customer: "
+      *>               DISPLAY "ID: " CTABLE-CUSTOMER-ID(CIDX)
+      *>               DISPLAY "Name:" CTABLE-CUSTOMER-NAME(CIDX)
                 END-PERFORM
 
 
-       *>       test printing customer
+       *>       test printing inventory
                 PERFORM VARYING IIDX FROM 1 BY 1
                   UNTIL IIDX > WS-INVENTORY-COUNT
-                    DISPLAY "Inventory: "
-                    DISPLAY "ID: " ITABLE-INVENTORY-ID(IIDX)
-                    DISPLAY "Item Name:" ITABLE-ITEM-NAME(IIDX)
+      *>               DISPLAY "Inventory: "
+      *>               DISPLAY "ID: " ITABLE-INVENTORY-ID(IIDX)
+      *>               DISPLAY "Item Name:" ITABLE-ITEM-NAME(IIDX)
 
                 END-PERFORM
 
