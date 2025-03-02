@@ -75,9 +75,9 @@
 
            FD ERROR-FILE.
            01 ERROR-RECORD.
-              05 ERROR-LITERAL PIC X(6) VALUE "Error:".
+              05 ERROR-LITERAL PIC X(6).
               05 FILLER PIC X(1) VALUE SPACE.
-              05 ERROR-TYPE PIC X(11).
+              05 ERROR-TYPE PIC X(26).
               05 FILLER PIC X(1) VALUE SPACE.
               05 ERROR-ID PIC X(6).
 
@@ -203,7 +203,8 @@
                    *> If customer not found, write error and exit
                    IF NOT FOUND-TRANS-CUST
                        *> write error record if cust not found
-                       MOVE "Customer ID NOT FOUND" TO ERROR-TYPE
+                       MOVE "Error" to ERROR-LITERAL
+                       MOVE "CUSTOMER-ID-NOT-FOUND" TO ERROR-TYPE
                        MOVE CUSTOMER-ID OF TRANSACTION-RECORD
                        TO ERROR-ID
                        WRITE ERROR-RECORD
@@ -229,7 +230,8 @@
 
                     IF NOT FOUND-TRANS-INV
                        *> write error record
-                       MOVE "Inventory ID NOT FOUND" TO ERROR-TYPE
+                       MOVE "Error" to ERROR-LITERAL
+                       MOVE "INVENTORY-ID-NOT-FOUND" TO ERROR-TYPE
                        MOVE INVENTORY-ID OF TRANSACTION-RECORD
                        TO ERROR-ID
                        WRITE ERROR-RECORD
