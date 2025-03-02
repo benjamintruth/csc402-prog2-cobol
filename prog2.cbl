@@ -59,19 +59,19 @@
 
            FD INVOICE-FILE.
            01 INVOICE-RECORD.
-              05 INV-CUSTOMER-NAME PIC X(18).
+              05 INVO-CUSTOMER-NAME PIC X(18).
               05 FILLER PIC X(2) VALUE SPACES.
-              05 INV-ITEM-NAME PIC X(22).
+              05 INVO-ITEM-NAME PIC X(22).
               05 FILLER PIC X(2) VALUE SPACES.
-              05 INV-ITEM-COST PIC $$$,$$9.99.
+              05 INVO-ITEM-COST PIC $$$,$$9.99.
               05 FILLER PIC X(2) VALUE SPACES.
-              05 INV-NUMBER-ORDERED PIC Z9.
+              05 INVO-NUMBER-ORDERED PIC Z9.
               05 FILLER PIC X(2) VALUE SPACES.
-              05 INV-TOTAL-BEFORE-DISCOUNT PIC $$$,$$9.99.
+              05 INVO-TOTAL-BEFORE-DISCOUNT PIC $$$,$$9.99.
               05 FILLER PIC X(2) VALUE SPACES.
-              05 INV-DISCOUNT-APPLIED PIC X(3).
+              05 INVO-DISCOUNT-APPLIED PIC X(3).
               05 FILLER PIC X(2) VALUE SPACES.
-              05 INV-TOTAL-AFTER-DISCOUNT PIC $$$,$$9.99.
+              05 INVO-TOTAL-AFTER-DISCOUNT PIC $$$,$$9.99.
 
            FD ERROR-FILE.
            01 ERROR-RECORD.
@@ -86,6 +86,12 @@
 
            01 WS-EOF        PIC X VALUE 'N'.
              88 END-OF-FILE VALUE 'Y'.
+
+            01 WS-TEST-PROCESSING.
+               05 TEST-NUMBER-ORDERED       PIC 99 VALUE 04.
+               05 TEST-COST                 PIC 99V99 VALUE 10.00.
+               05 TEST-ORDERCOST            PIC 99V99.
+               05 TEST-DISCOUNT-CODE        PIC X(1) VALUE "Z".
 
            *> array of customer records
            01 WS-CUSTOMER-COUNT  PIC 9(3) VALUE 0.
@@ -105,11 +111,12 @@
                10 ITABLE-ITEM-NAME PIC X(22).
                10 ITABLE-IN-STOCK PIC 99.
                10 ITABLE-REORDER-POINT PIC 99.
-               10 ITABLE-COST PIC 99.99.
+               10 ITABLE-COST PIC 99V99.
 
            *> transaction inventory id index
            01 WS-INV-TRANS-IDX PIC 9(3) VALUE 0.
-           01 FOUND-TRANS-INV PIC X VALUE 'N'.
+           01 WS-INV-ID-FOUND PIC X VALUE 'N'.
+             88 FOUND-TRANS-INV VALUE 'Y'.
 
 
            01 WS-CUSTOMER-TRANS-IDX    PIC 9(3) VALUE 0.
@@ -122,6 +129,37 @@
            DISPLAY "  "
            DISPLAY "BEGIN PROGRAM"
            DISPLAY "  "
+
+
+                          *> Try math
+           MULTIPLY TEST-COST BY TEST-NUMBER-ORDERED
+               GIVING TEST-ORDERCOST.
+
+           EVALUATE TEST-DISCOUNT-CODE
+               WHEN "A"
+                   MULTIPLY TEST-ORDERCOST
+                       BY 0.9 GIVING TEST-ORDERCOST
+               WHEN "B"
+                   MULTIPLY TEST-ORDERCOST
+                       BY 0.8 GIVING TEST-ORDERCOST
+               WHEN "C"
+                   MULTIPLY TEST-ORDERCOST
+                       BY 0.75 GIVING TEST-ORDERCOST
+               WHEN "D"
+                   IF TEST-NUMBER-ORDERED GREATER 3 THEN
+                       SUBTRACT TEST-COST
+                           FROM TEST-ORDERCOST GIVING TEST-ORDERCOST
+                   END-IF
+               WHEN "E"
+                   IF TEST-NUMBER-ORDERED GREATER 2 THEN
+                       SUBTRACT TEST-COST
+                           FROM TEST-ORDERCOST GIVING TEST-ORDERCOST
+                   END-IF.
+
+           DISPLAY TEST-ORDERCOST.
+
+
+
 
            *> Input Customers
            OPEN INPUT CUSTOMERS-FILE
@@ -182,6 +220,7 @@
            *> Input Transactions and process:
            OPEN INPUT TRANSACTION-FILE
            OPEN OUTPUT ERROR-FILE
+           OPEN OUTPUT INVOICE-FILE
 
            PERFORM UNTIL END-OF-FILE
                READ TRANSACTION-FILE INTO TRANSACTION-RECORD
@@ -216,8 +255,6 @@
                        DISPLAY "CREATE TRANS CUST NOT FOUND ERROR"
 
                        *> write error record if cust not found
-
-
                        MOVE "Customer ID NOT FOUND" TO ERROR-TYPE
                        MOVE CUSTOMER-ID OF TRANSACTION-RECORD
                        TO ERROR-ID
@@ -232,6 +269,7 @@
 
 
                    *> fetch inventory ID in the same pattern
+                    MOVE 'N' TO WS-INV-ID-FOUND
                     PERFORM VARYING IIDX FROM 1 BY 1
                       UNTIL IIDX > WS-INVENTORY-COUNT
 
@@ -242,33 +280,74 @@
                            MOVE IIDX
                            TO WS-INV-TRANS-IDX
 
-                           MOVE 'Y' TO FOUND-TRANS-INV
+                           MOVE 'Y' TO WS-INV-ID-FOUND
 
                        END-IF
                     END-PERFORM
 
-                    IF FOUND-TRANS-INV = 'Y'
-                        *> RESET VAR
-                        MOVE 'N' TO FOUND-TRANS-INV
+                    IF NOT FOUND-TRANS-INV
 
-                    ELSE
                         *> DEV : todo: REMOVE LATER
                        DISPLAY "CREATE TRANS INV NOT FOUND ERROR"
+
                        *> write error record
-
-
                        MOVE "Inventory ID NOT FOUND" TO ERROR-TYPE
                        MOVE INVENTORY-ID OF TRANSACTION-RECORD
                        TO ERROR-ID
                        WRITE ERROR-RECORD
-
-
                     END-IF
 
 
                     *> print transaction item name:
                     DISPLAY "Transaction Item: "
                     DISPLAY ITABLE-ITEM-NAME(WS-INV-TRANS-IDX)
+
+
+                    IF FOUND-TRANS-CUST AND FOUND-TRANS-INV
+
+
+                        *> step 1: create invoices and compute costs
+
+                        *> step 2: modify inv and cust arrays through
+                        *> program
+
+                        MOVE CTABLE-CUSTOMER-NAME(WS-CUSTOMER-TRANS-IDX)
+                        TO INVO-CUSTOMER-NAME
+
+                        MOVE ITABLE-ITEM-NAME(WS-INV-TRANS-IDX)
+                        TO INVO-ITEM-NAME
+
+                        MOVE ITABLE-COST(WS-INV-TRANS-IDX)
+                        TO INVO-ITEM-COST
+
+                        MOVE NUMBER-ORDERED OF TRANSACTION-RECORD
+                        TO INVO-NUMBER-ORDERED
+
+                        MULTIPLY
+                           NUMBER-ORDERED OF TRANSACTION-RECORD
+                           BY
+                           ITABLE-COST(WS-INV-TRANS-IDX)
+                           GIVING INVO-TOTAL-BEFORE-DISCOUNT
+
+
+
+
+
+
+
+
+
+
+      *>         05 INV-TOTAL-AFTER-DISCOUNT PIC $$$,$$9.99.
+
+
+      *>         05 INV-DISCOUNT-APPLIED PIC X(3).
+
+
+
+
+                    END-IF
+
 
 
 
@@ -284,11 +363,12 @@
 
            CLOSE TRANSACTION-FILE
            CLOSE ERROR-FILE
+           CLOSE INVOICE-FILE
 
                *> going to do a small example of the output files
 
                *> make an invoice
-               OPEN OUTPUT INVOICE-FILE
+      *>          OPEN OUTPUT INVOICE-FILE
 
       *>          MOVE "John Smith" TO INV-CUSTOMER-NAME
       *>          MOVE "Laptop Computer" TO INV-ITEM-NAME
@@ -299,7 +379,7 @@
       *>          MOVE 179.98 TO INV-TOTAL-AFTER-DISCOUNT
       *>          WRITE INVOICE-RECORD
 
-               CLOSE INVOICE-FILE
+      *>          CLOSE INVOICE-FILE
 
                *> error FILE
       *>          OPEN OUTPUT ERROR-FILE
