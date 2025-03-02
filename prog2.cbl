@@ -84,26 +84,38 @@
 
        WORKING-STORAGE SECTION.
 
-           01 WS-EOF        PIC X VALUE 'N'.
-               88 END-OF-FILE VALUE 'Y'.
+    01 WS-EOF        PIC X VALUE 'N'.
+        88 END-OF-FILE VALUE 'Y'.
 
-           *> array of customer records
-           01 WS-CUSTOMER-COUNT  PIC 9(3) VALUE 0.
-           01 CUSTOMER-TABLE.
-             05 CUSTOMER-ENTRY OCCURS 10 TIMES INDEXED BY IDX.
-               10  TABLE-CUSTOMER-ID       PIC X(5).
-               10  TABLE-CUSTOMER-NAME     PIC X(18).
-               10  TABLE-CUSTOMER-ADDRESS  PIC X(20).
-               10  TABLE-CUSTOMER-CITY     PIC X(12).
-               10  TABLE-STATE-ZIP-COUNTRY PIC X(12).
-               10  TABLE-AMOUNT-OWED       PIC 999.99.
+    *> array of customer records
+    01 WS-CUSTOMER-COUNT  PIC 9(3) VALUE 0.
+    01 CUSTOMER-TABLE.
+      05 CUSTOMER-ENTRY OCCURS 100 TIMES INDEXED BY CIDX.
+        10  CTABLE-CUSTOMER-ID       PIC X(5).
+        10  CTABLE-CUSTOMER-NAME     PIC X(18).
+        10  CTABLE-CUSTOMER-ADDRESS  PIC X(20).
+        10  CTABLE-CUSTOMER-CITY     PIC X(12).
+        10  CTABLE-STATE-ZIP-COUNTRY PIC X(12).
+        10  CTABLE-AMOUNT-OWED       PIC 999.99.
+
+    01 WS-INVENTORY-COUNT PIC 9(3) VALUE 0.
+    01 INVENTORY-TABLE.
+      05 INVENTORY-ENTRY OCCURS 100 TIMES INDEXED BY IIDX.
+        10 ITABLE-INVENTORY-ID PIC X(6).
+        10 ITABLE-ITEM-NAME PIC X(22).
+        10 ITABLE-IN-STOCK PIC 99.
+        10 ITABLE-REORDER-POINT PIC 99.
+        10 ITABLE-COST PIC 99.99.
+        
+    *> Add these new variables here
+    01 WS-CUSTOMER-INDEX    PIC 9(3) VALUE 0.
+    01 WS-FOUND             PIC X VALUE 'N'.
+        88 FOUND-ITEM       VALUE 'Y'.
 
 
        PROCEDURE DIVISION.
        MAIN-PROCEDURE.
 
-              PROCEDURE DIVISION.
-       MAIN-PROCEDURE.
 
            *> Step 1: Read Customers into Memory
            OPEN INPUT CUSTOMERS-FILE
@@ -289,4 +301,29 @@
 
                DISPLAY "END EXEC"
                STOP RUN.
+
+
+*> New subroutine to process transactions
+       PROCESS-TRANSACTION.
+           *> Find customer in the customer table
+
+               *> Find customer in the customer table
+MOVE 'N' TO WS-FOUND
+PERFORM VARYING CIDX FROM 1 BY 1
+  UNTIL CIDX > WS-CUSTOMER-COUNT OR FOUND-ITEM
+    IF CTABLE-CUSTOMER-ID(CIDX) = CUSTOMER-ID OF TRANSACTION-RECORD
+        MOVE 'Y' TO WS-FOUND
+        MOVE CIDX TO WS-CUSTOMER-INDEX
+    END-IF
+END-PERFORM
+
+*> If customer not found, write error and exit
+IF NOT FOUND-ITEM
+    MOVE "Customer ID" TO ERROR-TYPE
+    MOVE CUSTOMER-ID OF TRANSACTION-RECORD TO ERROR-ID
+    WRITE ERROR-RECORD
+    EXIT PARAGRAPH
+END-IF
+
+
        END PROGRAM PROG2.
