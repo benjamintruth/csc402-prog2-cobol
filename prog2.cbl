@@ -69,7 +69,7 @@
               05 FILLER PIC X(2) VALUE SPACES.
               05 INVO-TOTAL-BEFORE-DISCOUNT PIC $$$,$$9.99.
               05 FILLER PIC X(2) VALUE SPACES.
-              05 INVO-DISCOUNT-APPLIED PIC X(3).
+              05 INVO-DISCOUNT-APPLIED PIC $$$,$$9.99.
               05 FILLER PIC X(2) VALUE SPACES.
               05 INVO-TOTAL-AFTER-DISCOUNT PIC $$$,$$9.99.
 
@@ -87,11 +87,10 @@
            01 WS-EOF        PIC X VALUE 'N'.
              88 END-OF-FILE VALUE 'Y'.
 
-            01 WS-TEST-PROCESSING.
-               05 TEST-NUMBER-ORDERED       PIC 99 VALUE 04.
-               05 TEST-COST                 PIC 99V99 VALUE 10.00.
-               05 TEST-ORDERCOST            PIC 99V99.
-               05 TEST-DISCOUNT-CODE        PIC X(1) VALUE "Z".
+            01 WS-CHARGE-PROCESSING.
+               05 CHARGE-ORDER-COST           PIC 99V99.
+               05 CHARGE-DISCOUNT             PIC 99V99.
+               05 CHARGE-DISCOUNTED-COST      PIC 99V99.
 
            *> array of customer records
            01 WS-CUSTOMER-COUNT  PIC 9(3) VALUE 0.
@@ -102,7 +101,7 @@
                10  CTABLE-CUSTOMER-ADDRESS  PIC X(20).
                10  CTABLE-CUSTOMER-CITY     PIC X(12).
                10  CTABLE-STATE-ZIP-COUNTRY PIC X(12).
-               10  CTABLE-AMOUNT-OWED       PIC 999.99.
+               10  CTABLE-AMOUNT-OWED       PIC 999V99.
 
            01 WS-INVENTORY-COUNT PIC 9(3) VALUE 0.
            01 INVENTORY-TABLE.
@@ -125,45 +124,7 @@
 
        PROCEDURE DIVISION.
        MAIN-PROCEDURE.
-
-           DISPLAY "  "
-           DISPLAY "BEGIN PROGRAM"
-           DISPLAY "  "
-
-
-                          *> Try math
-           MULTIPLY TEST-COST BY TEST-NUMBER-ORDERED
-               GIVING TEST-ORDERCOST.
-
-           EVALUATE TEST-DISCOUNT-CODE
-               WHEN "A"
-                   MULTIPLY TEST-ORDERCOST
-                       BY 0.9 GIVING TEST-ORDERCOST
-               WHEN "B"
-                   MULTIPLY TEST-ORDERCOST
-                       BY 0.8 GIVING TEST-ORDERCOST
-               WHEN "C"
-                   MULTIPLY TEST-ORDERCOST
-                       BY 0.75 GIVING TEST-ORDERCOST
-               WHEN "D"
-                   IF TEST-NUMBER-ORDERED GREATER 3 THEN
-                       SUBTRACT TEST-COST
-                           FROM TEST-ORDERCOST GIVING TEST-ORDERCOST
-                   END-IF
-               WHEN "E"
-                   IF TEST-NUMBER-ORDERED GREATER 2 THEN
-                       SUBTRACT TEST-COST
-                           FROM TEST-ORDERCOST GIVING TEST-ORDERCOST
-                   END-IF.
-
-           DISPLAY TEST-ORDERCOST.
-
-
-
-
-           *> Input Customers
            OPEN INPUT CUSTOMERS-FILE
-
            PERFORM UNTIL END-OF-FILE
                READ CUSTOMERS-FILE INTO CUSTOMER-RECORD
                    AT END MOVE 'Y' TO WS-EOF
@@ -185,15 +146,13 @@
                        TO CTABLE-AMOUNT-OWED(WS-CUSTOMER-COUNT)
                END-IF
            END-PERFORM.
-
            CLOSE CUSTOMERS-FILE
 
            *> reset the EOF flag
            MOVE 'N' TO WS-EOF
 
-           *> Input Inventory
-           OPEN INPUT INVENTORY-FILE
 
+           OPEN INPUT INVENTORY-FILE
            PERFORM UNTIL END-OF-FILE
                READ INVENTORY-FILE INTO INVENTORY-RECORD
                    AT END MOVE 'Y' TO WS-EOF
@@ -228,12 +187,6 @@
                END-READ
 
                IF NOT END-OF-FILE
-
-                   *> GO ZONE
-                   DISPLAY "Transaction: "
-                   DISPLAY "Customer ID: " CUSTOMER-ID
-                       OF TRANSACTION-RECORD
-
                    *> CUSTOMER LOOKUP
                    MOVE 'N' TO WS-CUST-ID-FOUND
                    PERFORM VARYING CIDX FROM 1 BY 1
@@ -249,11 +202,6 @@
 
                    *> If customer not found, write error and exit
                    IF NOT FOUND-TRANS-CUST
-
-
-                       *> DEV : todo: REMOVE LATER
-                       DISPLAY "CREATE TRANS CUST NOT FOUND ERROR"
-
                        *> write error record if cust not found
                        MOVE "Customer ID NOT FOUND" TO ERROR-TYPE
                        MOVE CUSTOMER-ID OF TRANSACTION-RECORD
@@ -261,12 +209,6 @@
                        WRITE ERROR-RECORD
 
                    END-IF
-
-
-                    *> print transaction item name:
-                    DISPLAY "Customer Name: "
-                    DISPLAY CTABLE-CUSTOMER-NAME(WS-CUSTOMER-TRANS-IDX)
-
 
                    *> fetch inventory ID in the same pattern
                     MOVE 'N' TO WS-INV-ID-FOUND
@@ -286,10 +228,6 @@
                     END-PERFORM
 
                     IF NOT FOUND-TRANS-INV
-
-                        *> DEV : todo: REMOVE LATER
-                       DISPLAY "CREATE TRANS INV NOT FOUND ERROR"
-
                        *> write error record
                        MOVE "Inventory ID NOT FOUND" TO ERROR-TYPE
                        MOVE INVENTORY-ID OF TRANSACTION-RECORD
@@ -297,124 +235,124 @@
                        WRITE ERROR-RECORD
                     END-IF
 
+               IF FOUND-TRANS-CUST AND FOUND-TRANS-INV
 
-                    *> print transaction item name:
-                    DISPLAY "Transaction Item: "
-                    DISPLAY ITABLE-ITEM-NAME(WS-INV-TRANS-IDX)
+                   *> compute discount
+                   MULTIPLY ITABLE-COST(WS-INV-TRANS-IDX)
+                       BY NUMBER-ORDERED OF TRANSACTION-RECORD
+                       GIVING CHARGE-ORDER-COST
+
+                   EVALUATE DISCOUNT OF TRANSACTION-RECORD
+                       WHEN "A"
+                           MULTIPLY CHARGE-ORDER-COST
+                               BY 0.1 GIVING CHARGE-DISCOUNT
+                       WHEN "B"
+                           MULTIPLY CHARGE-ORDER-COST
+                               BY 0.2 GIVING CHARGE-DISCOUNT
+                       WHEN "C"
+                           MULTIPLY CHARGE-ORDER-COST
+                               BY 0.25 GIVING CHARGE-DISCOUNT
+                       WHEN "D"
+                           IF NUMBER-ORDERED OF TRANSACTION-RECORD
+                           GREATER 3 THEN
+                               MOVE ITABLE-COST(WS-INV-TRANS-IDX)
+                               TO CHARGE-DISCOUNT
+                           END-IF
+                       WHEN "E"
+                           IF NUMBER-ORDERED OF TRANSACTION-RECORD
+                           GREATER 2 THEN
+                               MOVE ITABLE-COST(WS-INV-TRANS-IDX)
+                               TO CHARGE-DISCOUNT
+                           END-IF
+                   END-EVALUATE
+
+                   SUBTRACT CHARGE-DISCOUNT FROM CHARGE-ORDER-COST
+                   GIVING CHARGE-DISCOUNTED-COST
+
+                   *> build invoice
+                   MOVE CTABLE-CUSTOMER-NAME(WS-CUSTOMER-TRANS-IDX)
+                   TO INVO-CUSTOMER-NAME
+
+                   MOVE ITABLE-ITEM-NAME(WS-INV-TRANS-IDX)
+                   TO INVO-ITEM-NAME
+
+                   MOVE ITABLE-COST(WS-INV-TRANS-IDX)
+                   TO INVO-ITEM-COST
+
+                   MOVE NUMBER-ORDERED OF TRANSACTION-RECORD
+                   TO INVO-NUMBER-ORDERED
+
+                   MOVE CHARGE-ORDER-COST
+                   TO INVO-TOTAL-BEFORE-DISCOUNT
+
+                   MOVE CHARGE-DISCOUNT
+                   TO INVO-DISCOUNT-APPLIED
+
+                   MOVE CHARGE-DISCOUNTED-COST
+                   TO INVO-TOTAL-AFTER-DISCOUNT
+
+                   MULTIPLY
+                   NUMBER-ORDERED OF TRANSACTION-RECORD
+                   BY
+                   ITABLE-COST(WS-INV-TRANS-IDX)
+                   GIVING INVO-TOTAL-BEFORE-DISCOUNT
+
+                   *> reduce in stock item quanity
+                   SUBTRACT NUMBER-ORDERED OF TRANSACTION-RECORD
+                   FROM ITABLE-IN-STOCK(WS-CUSTOMER-TRANS-IDX)
+                   GIVING ITABLE-IN-STOCK(WS-CUSTOMER-TRANS-IDX)
+
+                   *> add final cost to customer balance
+                   ADD CHARGE-DISCOUNTED-COST
+                   TO CTABLE-AMOUNT-OWED(WS-CUSTOMER-TRANS-IDX)
+                   GIVING CTABLE-AMOUNT-OWED(WS-CUSTOMER-TRANS-IDX)
 
 
-                    IF FOUND-TRANS-CUST AND FOUND-TRANS-INV
+                   *> check if need to REORDER-POINT
+                   IF ITABLE-IN-STOCK(WS-CUSTOMER-TRANS-IDX)
+                   <= ITABLE-REORDER-POINT(WS-CUSTOMER-TRANS-IDX)
+                       DISPLAY "ITEM: "
+                       ITABLE-ITEM-NAME(WS-INV-TRANS-IDX)
+                       " IS BELOW REORDER POINT"
+                       DISPLAY "   "
 
+                   END-IF
 
-                        *> step 1: create invoices and compute costs
+                   *> write invoice
+                   WRITE INVOICE-RECORD
 
-                        *> step 2: modify inv and cust arrays through
-                        *> program
+               *> end if both records found / no error
+               END-IF
 
-                        MOVE CTABLE-CUSTOMER-NAME(WS-CUSTOMER-TRANS-IDX)
-                        TO INVO-CUSTOMER-NAME
-
-                        MOVE ITABLE-ITEM-NAME(WS-INV-TRANS-IDX)
-                        TO INVO-ITEM-NAME
-
-                        MOVE ITABLE-COST(WS-INV-TRANS-IDX)
-                        TO INVO-ITEM-COST
-
-                        MOVE NUMBER-ORDERED OF TRANSACTION-RECORD
-                        TO INVO-NUMBER-ORDERED
-
-                        MULTIPLY
-                           NUMBER-ORDERED OF TRANSACTION-RECORD
-                           BY
-                           ITABLE-COST(WS-INV-TRANS-IDX)
-                           GIVING INVO-TOTAL-BEFORE-DISCOUNT
-
-
-
-
-
-
-
-
-
-
-      *>         05 INV-TOTAL-AFTER-DISCOUNT PIC $$$,$$9.99.
-
-
-      *>         05 INV-DISCOUNT-APPLIED PIC X(3).
-
-
-
-
-                    END-IF
-
-
-
-
-                   *> spacer for clean printing
-                   DISPLAY "   "
+               *> if end of file
                END-IF
            END-PERFORM.
 
-           *> clean spacer
-           DISPLAY "  "
-           DISPLAY "  "
-           DISPLAY "  "
+           *> print customers after changes
+           DISPLAY "Customers: "
+           PERFORM VARYING CIDX FROM 1 BY 1
+           UNTIL CIDX > WS-CUSTOMER-COUNT
+               DISPLAY
+               CUSTOMER-ENTRY(CIDX)
+               DISPLAY "   "
+           END-PERFORM
 
+           *> print inventory after changes
+           DISPLAY "Inventory: "
+           PERFORM VARYING IIDX FROM 1 BY 1
+           UNTIL IIDX > WS-INVENTORY-COUNT
+               DISPLAY
+               INVENTORY-ENTRY(IIDX)
+               DISPLAY "   "
+           END-PERFORM
+
+           *> close files and shut down
            CLOSE TRANSACTION-FILE
            CLOSE ERROR-FILE
            CLOSE INVOICE-FILE
 
-               *> going to do a small example of the output files
-
-               *> make an invoice
-      *>          OPEN OUTPUT INVOICE-FILE
-
-      *>          MOVE "John Smith" TO INV-CUSTOMER-NAME
-      *>          MOVE "Laptop Computer" TO INV-ITEM-NAME
-      *>          MOVE 99.99 TO INV-ITEM-COST
-      *>          MOVE 02 TO INV-NUMBER-ORDERED
-      *>          MOVE 199.98 TO INV-TOTAL-BEFORE-DISCOUNT
-      *>          MOVE "Yes" TO INV-DISCOUNT-APPLIED
-      *>          MOVE 179.98 TO INV-TOTAL-AFTER-DISCOUNT
-      *>          WRITE INVOICE-RECORD
-
-      *>          CLOSE INVOICE-FILE
-
-               *> error FILE
-      *>          OPEN OUTPUT ERROR-FILE
-
-      *>          MOVE "Customer ID" TO ERROR-TYPE
-      *>          MOVE "C9999" TO ERROR-ID
-      *>          WRITE ERROR-RECORD
-
-      *>          CLOSE ERROR-FILE
-
-
-           *> LOOP EXAMPLES
-
-       *>       test printing customer
-                PERFORM VARYING CIDX FROM 1 BY 1
-                  UNTIL CIDX > WS-CUSTOMER-COUNT
-      *>               DISPLAY "Customer: "
-      *>               DISPLAY "ID: " CTABLE-CUSTOMER-ID(CIDX)
-      *>               DISPLAY "Name:" CTABLE-CUSTOMER-NAME(CIDX)
-                END-PERFORM
-
-
-       *>       test printing inventory
-                PERFORM VARYING IIDX FROM 1 BY 1
-                  UNTIL IIDX > WS-INVENTORY-COUNT
-      *>               DISPLAY "Inventory: "
-      *>               DISPLAY "ID: " ITABLE-INVENTORY-ID(IIDX)
-      *>               DISPLAY "Item Name:" ITABLE-ITEM-NAME(IIDX)
-
-                END-PERFORM
-
-               DISPLAY "END EXEC"
-               STOP RUN.
-
-
+           *> finn
+           STOP RUN.
 
 
        END PROGRAM PROG2.
