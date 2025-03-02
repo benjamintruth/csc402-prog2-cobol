@@ -177,12 +177,21 @@
                IF NOT END-OF-FILE
 
                    *> GO ZONE
-
                    DISPLAY "Transaction: "
                    DISPLAY "Customer ID: " CUSTOMER-ID
                        OF TRANSACTION-RECORD
 
-               *> IF ERROR OCCURS: PRINT TO ERROR, BREAK LOOP
+                   *> try to fetch the index of the customer that matches the customerID on the TRANSACTION-FILE
+
+                       *> loop customers and test equality
+
+                           *> if found, save to variable
+
+                           *> if not found, output error, break loop
+
+
+
+
 
                END-IF
            END-PERFORM.
