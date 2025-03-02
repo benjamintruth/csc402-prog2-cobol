@@ -85,7 +85,7 @@
        WORKING-STORAGE SECTION.
 
            01 WS-EOF        PIC X VALUE 'N'.
-               88 END-OF-FILE VALUE 'Y'.
+             88 END-OF-FILE VALUE 'Y'.
 
            *> array of customer records
            01 WS-CUSTOMER-COUNT  PIC 9(3) VALUE 0.
@@ -108,8 +108,13 @@
                10 ITABLE-COST PIC 99.99.
 
            *> transaction inventory id index
-           01 WS-TRANS-INV-ID-IDX PIC 9(3) VALUE 0.
-           01 TRANS-INV-MATCH-FOUND PIC X VALUE 'N'.
+           01 WS-INV-TRANS-IDX PIC 9(3) VALUE 0.
+           01 FOUND-TRANS-INV PIC X VALUE 'N'.
+
+
+           01 WS-CUSTOMER-TRANS-IDX    PIC 9(3) VALUE 0.
+           01 WS-CUST-ID-FOUND             PIC X VALUE 'N'.
+             88 FOUND-TRANS-CUST       VALUE 'Y'.
 
        PROCEDURE DIVISION.
        MAIN-PROCEDURE.
@@ -176,6 +181,7 @@
 
            *> Input Transactions and process:
            OPEN INPUT TRANSACTION-FILE
+           OPEN OUTPUT ERROR-FILE
 
            PERFORM UNTIL END-OF-FILE
                READ TRANSACTION-FILE INTO TRANSACTION-RECORD
@@ -189,13 +195,41 @@
                    DISPLAY "Customer ID: " CUSTOMER-ID
                        OF TRANSACTION-RECORD
 
-                   *> try to fetch the index of the customer that matches the customerID on the TRANSACTION-FILE
+                   *> CUSTOMER LOOKUP
+                   MOVE 'N' TO WS-CUST-ID-FOUND
+                   PERFORM VARYING CIDX FROM 1 BY 1
+                   UNTIL CIDX > WS-CUSTOMER-COUNT OR FOUND-TRANS-CUST
 
-                       *> loop customers and test equality
+                       IF CTABLE-CUSTOMER-ID(CIDX) = CUSTOMER-ID
+                       OF TRANSACTION-RECORD
 
-                           *> if found, save to variable
+                           MOVE 'Y' TO WS-CUST-ID-FOUND
+                           MOVE CIDX TO WS-CUSTOMER-TRANS-IDX
+                       END-IF
+                   END-PERFORM
 
-                           *> if not found, output error, break loop
+                   *> If customer not found, write error and exit
+                   IF NOT FOUND-TRANS-CUST
+
+
+                       *> DEV : todo: REMOVE LATER
+                       DISPLAY "CREATE TRANS CUST NOT FOUND ERROR"
+
+                       *> write error record if cust not found
+
+
+                       MOVE "Customer ID NOT FOUND" TO ERROR-TYPE
+                       MOVE CUSTOMER-ID OF TRANSACTION-RECORD
+                       TO ERROR-ID
+                       WRITE ERROR-RECORD
+
+                   END-IF
+
+
+                    *> print transaction item name:
+                    DISPLAY "Customer Name: "
+                    DISPLAY CTABLE-CUSTOMER-NAME(WS-CUSTOMER-TRANS-IDX)
+
 
                    *> fetch inventory ID in the same pattern
                     PERFORM VARYING IIDX FROM 1 BY 1
@@ -206,25 +240,35 @@
                            *> store the index of this matching
                            *> inventory record
                            MOVE IIDX
-                           TO WS-TRANS-INV-ID-IDX
+                           TO WS-INV-TRANS-IDX
 
-                           MOVE 'Y' TO TRANS-INV-MATCH-FOUND
+                           MOVE 'Y' TO FOUND-TRANS-INV
 
                        END-IF
                     END-PERFORM
 
-                    IF TRANS-INV-MATCH-FOUND = 'Y'
+                    IF FOUND-TRANS-INV = 'Y'
                         *> RESET VAR
-                        MOVE 'N' TO TRANS-INV-MATCH-FOUND
+                        MOVE 'N' TO FOUND-TRANS-INV
 
                     ELSE
-                        DISPLAY "CREATE TRANS INV NOT FOUND ERROR"
+                        *> DEV : todo: REMOVE LATER
+                       DISPLAY "CREATE TRANS INV NOT FOUND ERROR"
+                       *> write error record
+
+
+                       MOVE "Inventory ID NOT FOUND" TO ERROR-TYPE
+                       MOVE INVENTORY-ID OF TRANSACTION-RECORD
+                       TO ERROR-ID
+                       WRITE ERROR-RECORD
+
+
                     END-IF
 
 
                     *> print transaction item name:
                     DISPLAY "Transaction Item: "
-                    DISPLAY ITABLE-ITEM-NAME(WS-TRANS-INV-ID-IDX)
+                    DISPLAY ITABLE-ITEM-NAME(WS-INV-TRANS-IDX)
 
 
 
@@ -239,31 +283,32 @@
            DISPLAY "  "
 
            CLOSE TRANSACTION-FILE
+           CLOSE ERROR-FILE
 
                *> going to do a small example of the output files
 
                *> make an invoice
                OPEN OUTPUT INVOICE-FILE
 
-               MOVE "John Smith" TO INV-CUSTOMER-NAME
-               MOVE "Laptop Computer" TO INV-ITEM-NAME
-               MOVE 99.99 TO INV-ITEM-COST
-               MOVE 02 TO INV-NUMBER-ORDERED
-               MOVE 199.98 TO INV-TOTAL-BEFORE-DISCOUNT
-               MOVE "Yes" TO INV-DISCOUNT-APPLIED
-               MOVE 179.98 TO INV-TOTAL-AFTER-DISCOUNT
-               WRITE INVOICE-RECORD
+      *>          MOVE "John Smith" TO INV-CUSTOMER-NAME
+      *>          MOVE "Laptop Computer" TO INV-ITEM-NAME
+      *>          MOVE 99.99 TO INV-ITEM-COST
+      *>          MOVE 02 TO INV-NUMBER-ORDERED
+      *>          MOVE 199.98 TO INV-TOTAL-BEFORE-DISCOUNT
+      *>          MOVE "Yes" TO INV-DISCOUNT-APPLIED
+      *>          MOVE 179.98 TO INV-TOTAL-AFTER-DISCOUNT
+      *>          WRITE INVOICE-RECORD
 
                CLOSE INVOICE-FILE
 
                *> error FILE
-               OPEN OUTPUT ERROR-FILE
+      *>          OPEN OUTPUT ERROR-FILE
 
-               MOVE "Customer ID" TO ERROR-TYPE
-               MOVE "C9999" TO ERROR-ID
-               WRITE ERROR-RECORD
+      *>          MOVE "Customer ID" TO ERROR-TYPE
+      *>          MOVE "C9999" TO ERROR-ID
+      *>          WRITE ERROR-RECORD
 
-               CLOSE ERROR-FILE
+      *>          CLOSE ERROR-FILE
 
 
            *> LOOP EXAMPLES
@@ -288,4 +333,8 @@
 
                DISPLAY "END EXEC"
                STOP RUN.
+
+
+
+
        END PROGRAM PROG2.
